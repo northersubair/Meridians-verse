@@ -23,6 +23,8 @@ import { AccessTokenGuard } from './auth/guard/access-token/access-token.guard';
 import { MailProvider } from './mail/providers/mail.provider';
 import { TweetModule } from './tweets/dto/tweet.module';
 import { UploadModule } from './upload/upload.module';
+import { HealthModule } from './health/health.module';
+import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 
 
 @Module({
@@ -95,7 +97,9 @@ import { UploadModule } from './upload/upload.module';
     MailModule,
     PaginationModule,
     TweetModule,
-    UploadModule 
+    UploadModule,
+    HealthModule,
+    PrometheusModule.register(),
   ],
 
   controllers: [AppController],
