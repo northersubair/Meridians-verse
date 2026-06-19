@@ -1,4 +1,4 @@
-import { Body, Injectable } from '@nestjs/common';
+import { Body, HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { GetPostsParamDto } from '../dto/post-param.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Post } from '../post.entity';
@@ -36,11 +36,35 @@ export class PostsService {
     }
   }
 
+  /**
+   * Soft-deletes a post (issue #427).
+   * TypeORM automatically excludes rows with a non-null `deletedAt` from
+   * subsequent `find*` calls. Use `restorePost` to undo this operation.
+   */
   public async deleteOne(id: number) {
-    //find the post you want to delete, find the metaoption of the post you want to delete
-    await this.postRepository.delete(id);
+    await this.postRepository.softDelete(id);
 
     return { deleted: true, id };
+  }
+
+  /**
+   * Restores a soft-deleted post, clearing its `deletedAt` value so it
+   * reappears in regular queries.
+   */
+  public async restorePost(id: number) {
+    const result = await this.postRepository.restore(id);
+
+    if (!result.affected) {
+      throw new HttpException(
+        {
+          status: HttpStatus.NOT_FOUND,
+          error: `Post with id ${id} was not found or is not soft-deleted`,
+        },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    return { restored: true, id };
   }
 
   public async createPost(createpostDto: CreatePostDto) {
