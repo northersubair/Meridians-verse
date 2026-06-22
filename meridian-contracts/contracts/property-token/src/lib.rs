@@ -45,6 +45,7 @@ mod property_token {
         ProposalNotFound,
         ProposalClosed,
         AskNotFound,
+        InconsistentState,
     }
 
     /// Property Token contract that maintains compatibility with ERC-721 and ERC-1155
@@ -105,6 +106,10 @@ mod property_token {
         compliance_registry: Option<AccountId>,
         fee_manager: Option<AccountId>,
         tax_records: Mapping<(AccountId, TokenId), TaxRecord>,
+
+        // Gas estimation: per-chain overhead and cross-contract buffer (issue #461)
+        chain_gas_overhead: Mapping<ChainId, u64>,
+        cross_contract_gas_buffer_pct: u8,
     }
 
     // Domain types are extracted to keep this file focused on contract behavior.
@@ -181,6 +186,9 @@ mod property_token {
                 compliance_registry: None,
                 fee_manager: None,
                 tax_records: Mapping::default(),
+
+                chain_gas_overhead: Mapping::default(),
+                cross_contract_gas_buffer_pct: 20,
             }
         }
 
@@ -818,17 +826,20 @@ mod property_token {
         #[ink(message)]
         pub fn cancel_ask(&mut self, token_id: TokenId) -> Result<(), Error> {
             let seller = self.env().caller();
-            let _ask = self
+            let ask = self
                 .asks
                 .get((token_id, seller))
                 .ok_or(Error::AskNotFound)?;
             let esc = self.escrowed_shares.get((token_id, seller)).unwrap_or(0);
+            if esc != ask.amount {
+                return Err(Error::InconsistentState);
+            }
             let bal = self.balances.get((seller, token_id)).unwrap_or(0);
             self.balances
-                .insert((seller, token_id), &(bal.saturating_add(esc)));
+                .insert((seller, token_id), &(bal.saturating_add(ask.amount)));
             self.escrowed_shares.insert((token_id, seller), &0u128);
             self.asks.remove((token_id, seller));
-            self.env().emit_event(AskCancelled { token_id, seller });
+            self.env().emit_event(AskCancelled { token_id, seller, escrowed_amount: esc });
             Ok(())
         }
 
@@ -1697,7 +1708,21 @@ mod property_token {
                 .ok_or(Error::TokenNotFound)?;
             let metadata_gas = property_info.metadata.legal_description.len() as u64 * 100;
 
-            Ok(base_gas + metadata_gas)
+            // Cross-contract call overhead (25 000 gas per hop, configurable per chain)
+            let cross_contract_overhead: u64 = 25_000;
+            let chain_overhead = self
+                .chain_gas_overhead
+                .get(destination_chain)
+                .unwrap_or(cross_contract_overhead);
+
+            // Buffer to absorb variable cross-chain costs (default 20%)
+            let buffer_pct = self.cross_contract_gas_buffer_pct as u64;
+            let subtotal = base_gas
+                .saturating_add(metadata_gas)
+                .saturating_add(chain_overhead);
+            let buffer = subtotal.saturating_mul(buffer_pct) / 100;
+
+            Ok(subtotal.saturating_add(buffer))
         }
 
         /// Monitors bridge status
@@ -1825,6 +1850,33 @@ mod property_token {
             self.bridge_config.clone()
         }
 
+        /// Sets the gas overhead for a specific destination chain (admin only, issue #461).
+        #[ink(message)]
+        pub fn set_chain_gas_overhead(
+            &mut self,
+            chain_id: ChainId,
+            overhead: u64,
+        ) -> Result<(), Error> {
+            if self.env().caller() != self.admin {
+                return Err(Error::Unauthorized);
+            }
+            self.chain_gas_overhead.insert(chain_id, &overhead);
+            Ok(())
+        }
+
+        /// Sets the cross-contract gas buffer percentage (0-100, admin only, issue #461).
+        #[ink(message)]
+        pub fn set_cross_contract_gas_buffer_pct(&mut self, pct: u8) -> Result<(), Error> {
+            if self.env().caller() != self.admin {
+                return Err(Error::Unauthorized);
+            }
+            if pct > 100 {
+                return Err(Error::InvalidParameters);
+            }
+            self.cross_contract_gas_buffer_pct = pct;
+            Ok(())
+        }
+
         /// Pauses or unpauses the bridge (admin only)
         #[ink(message)]
         pub fn set_emergency_pause(&mut self, paused: bool) -> Result<(), Error> {
@@ -1932,12 +1984,28 @@ mod property_token {
             Hash::from(hash_bytes)
         }
 
-        /// Helper to estimate bridge gas usage
+        /// Helper to estimate bridge gas usage, factoring in cross-contract call overhead
+        /// and a configurable buffer percentage (issue #461).
         fn estimate_bridge_gas_usage(&self, request: &MultisigBridgeRequest) -> u64 {
-            let base_gas = 100000; // Base gas for bridge operation
+            let base_gas: u64 = 100_000;
             let metadata_gas = request.metadata.legal_description.len() as u64 * 100;
-            let signature_gas = request.required_signatures as u64 * 5000; // Gas per signature
-            base_gas + metadata_gas + signature_gas
+            let signature_gas = request.required_signatures as u64 * 5_000;
+
+            // Per-destination-chain overhead for cross-contract calls
+            let chain_overhead = self
+                .chain_gas_overhead
+                .get(request.destination_chain)
+                .unwrap_or(25_000);
+
+            let subtotal = base_gas
+                .saturating_add(metadata_gas)
+                .saturating_add(signature_gas)
+                .saturating_add(chain_overhead);
+
+            // Apply configurable buffer to absorb gas price spikes
+            let buffer_pct = self.cross_contract_gas_buffer_pct as u64;
+            let buffer = subtotal.saturating_mul(buffer_pct) / 100;
+            subtotal.saturating_add(buffer)
         }
 
         /// Log an error for monitoring and debugging
