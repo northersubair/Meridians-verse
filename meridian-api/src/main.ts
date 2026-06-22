@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import { DataResponseInterceptor } from './common/interceptors/data-response.interceptor';
 import { ConfigService } from '@nestjs/config';
 import { validationExceptionFactory } from './common/exceptions/validation.exception';
+import { SanitizePipe } from './common/pipes/sanitize.pipe';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -44,6 +45,8 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // Sanitize all request body strings before validation to prevent XSS (issue #453).
+  app.useGlobalPipes(new SanitizePipe());
   // Enable URI-based API versioning (issue #454).
   // All existing routes remain accessible at their current paths.
   // New routes should declare a @Version('1') decorator and be mounted
