@@ -8,6 +8,7 @@ import { DataSource } from 'typeorm';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { envValidationSchema } from './config/env.validation';
 
 import { UsersModule } from './users/users.module';
 import { PostModule } from './post/post.module';
@@ -36,6 +37,11 @@ import { PrometheusModule } from '@willsoto/nestjs-prometheus';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: `.env.${process.env.NODE_ENV || 'development'}`,
+      validationSchema: envValidationSchema,
+      validationOptions: {
+        allowUnknown: true,
+        abortEarly: false,
+      },
     }),
 
     /**
