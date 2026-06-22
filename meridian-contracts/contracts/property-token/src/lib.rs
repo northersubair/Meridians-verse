@@ -1014,11 +1014,11 @@ mod property_token {
                 timestamp: self.env().block_timestamp(),
                 transaction_hash: {
                     use scale::Encode;
+                    use ink::env::hash::{Blake2x256, CryptoHash};
                     let data = (&caller, token_id);
                     let encoded = data.encode();
                     let mut hash_bytes = [0u8; 32];
-                    let len = encoded.len().min(32);
-                    hash_bytes[..len].copy_from_slice(&encoded[..len]);
+                    Blake2x256::hash(&encoded, &mut hash_bytes);
                     Hash::from(hash_bytes)
                 },
             };
@@ -1505,11 +1505,11 @@ mod property_token {
                 timestamp: self.env().block_timestamp(),
                 transaction_hash: {
                     use scale::Encode;
+                    use ink::env::hash::{Blake2x256, CryptoHash};
                     let data = (&recipient, new_token_id);
                     let encoded = data.encode();
                     let mut hash_bytes = [0u8; 32];
-                    let len = encoded.len().min(32);
-                    hash_bytes[..len].copy_from_slice(&encoded[..len]);
+                    Blake2x256::hash(&encoded, &mut hash_bytes);
                     Hash::from(hash_bytes)
                 },
             };
@@ -1891,11 +1891,11 @@ mod property_token {
                 timestamp: self.env().block_timestamp(),
                 transaction_hash: {
                     use scale::Encode;
+                    use ink::env::hash::{Blake2x256, CryptoHash};
                     let data = (&from, &to, token_id);
                     let encoded = data.encode();
                     let mut hash_bytes = [0u8; 32];
-                    let len = encoded.len().min(32);
-                    hash_bytes[..len].copy_from_slice(&encoded[..len]);
+                    Blake2x256::hash(&encoded, &mut hash_bytes);
                     Hash::from(hash_bytes)
                 },
             };
@@ -1912,8 +1912,9 @@ mod property_token {
             self.token_pending_requests.contains(token_id)
         }
 
-        /// Helper to generate bridge transaction hash
+        /// Helper to generate bridge transaction hash using Blake2x256 (issue #458).
         fn generate_bridge_transaction_hash(&self, request: &MultisigBridgeRequest) -> Hash {
+            use ink::env::hash::{Blake2x256, CryptoHash};
             use scale::Encode;
             let data = (
                 request.request_id,
@@ -1925,10 +1926,8 @@ mod property_token {
                 self.env().block_timestamp(),
             );
             let encoded = data.encode();
-            // Simple hash: use first 32 bytes of encoded data
             let mut hash_bytes = [0u8; 32];
-            let len = encoded.len().min(32);
-            hash_bytes[..len].copy_from_slice(&encoded[..len]);
+            Blake2x256::hash(&encoded, &mut hash_bytes);
             Hash::from(hash_bytes)
         }
 
