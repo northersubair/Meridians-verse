@@ -1,8 +1,8 @@
-import { Body, HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { GetPostsParamDto } from '../dto/post-param.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Post } from '../post.entity';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { CreatePostDto } from '../dto/create-post.dto';
 import { UserService } from 'src/users/providers/user.services';
 import { TagsService } from 'src/tag/tags.service';
@@ -13,6 +13,8 @@ import { Paginated } from 'src/common/pagination/interfaces/paginated.interface'
 
 @Injectable()
 export class PostsService {
+  private readonly logger = new Logger(PostsService.name);
+
   constructor(
     @InjectRepository(Post) private postRepository: Repository<Post>,
 
@@ -21,19 +23,19 @@ export class PostsService {
     private readonly tagService: TagsService,
 
     private readonly paginationService: Pagination,
+
+    private readonly dataSource: DataSource,
   ) {}
 
   public async FindAllposts(postQuery: GetPostsDto): Promise<Paginated<Post>> {
-    {
-      const post = await this.paginationService.paginatedQuery(
-        {
-          limit: postQuery.limit,
-          page: postQuery.page,
-        },
-        this.postRepository,
-      );
-      return post;
-    }
+    const post = await this.paginationService.paginatedQuery(
+      {
+        limit: postQuery.limit,
+        page: postQuery.page,
+      },
+      this.postRepository,
+    );
+    return post;
   }
 
   /**
@@ -67,49 +69,71 @@ export class PostsService {
     return { restored: true, id };
   }
 
+  /**
+   * Creates a post inside a transaction so that the post row, the MetaOption
+   * cascade, and the post-tags join-table rows are all written atomically.
+   * Any failure rolls back the entire operation preventing partial writes.
+   */
   public async createPost(createpostDto: CreatePostDto) {
-    //find author from databbase based on author ID i.e from postDTo
-    const author = await this.userService.findOneId(createpostDto.authorId);
-
-    // find tag from database
-    const tags = await this.tagService.findMultiTag(createpostDto.tags);
-
-    // /SECOND METHIOD very short line(64 & 74) AFTER puting cascade to "true" in post entity
-    // for this method comment or remove the metaoption repository
-    // the remove  [Metoption] from Post module we dont need it
-    const post = this.postRepository.create({
-      ...createpostDto,
-      author,
-      tags,
-    });
-
-    // return the post to the user
-    return await this.postRepository.save(post);
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    try {
+      const author = await this.userService.findOneId(createpostDto.authorId);
+      const tags = await this.tagService.findMultiTag(createpostDto.tags);
+      const post = queryRunner.manager.create(Post, {
+        ...createpostDto,
+        author,
+        tags,
+      });
+      const saved = await queryRunner.manager.save(Post, post);
+      await queryRunner.commitTransaction();
+      return saved;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(
+        'createPost transaction rolled back',
+        error instanceof Error ? error.message : String(error),
+      );
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
-  //TO EDIT A POST
+  /**
+   * Updates a post inside a transaction so that the post update and the
+   * tag join-table changes are applied atomically.
+   */
   public async UpdatePost(patchPostDto: PatchPostDto) {
-    //STEPS
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    try {
+      const tags = await this.tagService.findMultiTag(patchPostDto.tags);
+      const post = await queryRunner.manager.findOneBy(Post, {
+        id: patchPostDto.id,
+      });
 
-    //find the tags
-    const tags = await this.tagService.findMultiTag(patchPostDto.tags);
+      post.title = patchPostDto.title ?? post.title;
+      post.content = patchPostDto.content ?? post.content;
+      post.imageUrl = patchPostDto.imageUrl ?? post.imageUrl;
+      post.postType = patchPostDto.postType ?? post.postType;
+      post.postStatus = patchPostDto.PostStatus ?? post.postStatus;
+      post.tags = tags;
 
-    // find the post
-    const post = await this.postRepository.findOneBy({
-      id: patchPostDto.id,
-    });
-
-    // update the properties
-    post.title = patchPostDto.title ?? post.title;
-    post.content = patchPostDto.content ?? post.content;
-    post.imageUrl = patchPostDto.imageUrl ?? post.imageUrl;
-    post.postType = patchPostDto.postType ?? post.postType;
-    post.postStatus = patchPostDto.PostStatus ?? post.postStatus;
-
-    //assign the new tags
-    post.tags = tags;
-
-    // save the post
-    return await this.postRepository.save(post);
+      const saved = await queryRunner.manager.save(Post, post);
+      await queryRunner.commitTransaction();
+      return saved;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(
+        'UpdatePost transaction rolled back',
+        error instanceof Error ? error.message : String(error),
+      );
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 }

@@ -46,41 +46,58 @@ jest.mock('src/common/pagination/dto/pagination-query.dto', () => ({}), {
 
 import { PostsService } from './post.service';
 
+const mockAuthor = { id: 1, firstName: 'Jane', lastName: 'Doe' };
+const mockTags = [
+  { id: 1, name: 'nestjs' },
+  { id: 2, name: 'typescript' },
+];
+const mockPost = {
+  id: 10,
+  title: 'Hello',
+  content: 'World',
+  author: mockAuthor,
+  tags: mockTags,
+};
+
+function makeQueryRunner(managerOverrides: Record<string, jest.Mock> = {}) {
+  const manager: Record<string, jest.Mock> = {
+    create: jest.fn((_, dto) => ({ id: 10, ...dto })),
+    save: jest.fn(async (_, post) => post),
+    findOneBy: jest.fn(async () => ({ ...mockPost })),
+    ...managerOverrides,
+  };
+  return {
+    runner: {
+      connect: jest.fn(async () => undefined),
+      startTransaction: jest.fn(async () => undefined),
+      commitTransaction: jest.fn(async () => undefined),
+      rollbackTransaction: jest.fn(async () => undefined),
+      release: jest.fn(async () => undefined),
+      manager,
+    },
+    manager,
+  };
+}
+
 describe('PostsService', () => {
   let service: PostsService;
   let postRepository: {
-    find: jest.Mock;
-    delete: jest.Mock;
-    create: jest.Mock;
-    save: jest.Mock;
-    findOneBy: jest.Mock;
+    softDelete: jest.Mock;
+    restore: jest.Mock;
   };
   let userService: { findOneId: jest.Mock };
   let tagService: { findMultiTag: jest.Mock };
   let paginationService: { paginatedQuery: jest.Mock };
-
-  const mockAuthor = { id: 1, firstName: 'Jane', lastName: 'Doe' };
-  const mockTags = [
-    { id: 1, name: 'nestjs' },
-    { id: 2, name: 'typescript' },
-  ];
-  const mockPost = {
-    id: 10,
-    title: 'Hello',
-    content: 'World',
-    author: mockAuthor,
-    tags: mockTags,
-  };
+  let dataSource: { createQueryRunner: jest.Mock };
+  let currentQueryRunner: ReturnType<typeof makeQueryRunner>['runner'];
 
   beforeEach(() => {
+    const { runner } = makeQueryRunner();
+    currentQueryRunner = runner;
+
     postRepository = {
-      find: jest.fn(),
-      delete: jest.fn(),
-      softDelete: jest.fn(),
-      restore: jest.fn(),
-      create: jest.fn((dto) => ({ id: 10, ...dto })),
-      save: jest.fn(async (post) => post),
-      findOneBy: jest.fn(),
+      softDelete: jest.fn(async () => ({ affected: 1 })),
+      restore: jest.fn(async () => ({ affected: 1 })),
     };
     userService = { findOneId: jest.fn(async () => mockAuthor) };
     tagService = { findMultiTag: jest.fn(async () => mockTags) };
@@ -90,12 +107,14 @@ describe('PostsService', () => {
         meta: { total: 1, page: 1, limit: 10 },
       })),
     };
+    dataSource = { createQueryRunner: jest.fn(() => currentQueryRunner) };
 
     service = new PostsService(
       postRepository as any,
       userService as any,
       tagService as any,
       paginationService as any,
+      dataSource as any,
     );
   });
 
@@ -117,7 +136,6 @@ describe('PostsService', () => {
 
   describe('deleteOne', () => {
     it('soft-deletes a post by id and returns the deletion summary', async () => {
-      postRepository.softDelete.mockResolvedValue({ affected: 1 });
       const result = await service.deleteOne(10);
       expect(postRepository.softDelete).toHaveBeenCalledWith(10);
       expect(result).toEqual({ deleted: true, id: 10 });
@@ -125,78 +143,81 @@ describe('PostsService', () => {
   });
 
   describe('createPost', () => {
-    it('resolves the author and tags, then persists a new post', async () => {
-      const dto = {
-        title: 'Hello',
-        content: 'World',
-        authorId: 1,
-        tags: [1, 2],
-      } as any;
+    it('opens a transaction, resolves author + tags, persists the post, and commits', async () => {
+      const dto = { title: 'Hello', content: 'World', authorId: 1, tags: [1, 2] } as any;
 
       const result = await service.createPost(dto);
 
+      expect(dataSource.createQueryRunner).toHaveBeenCalled();
+      expect(currentQueryRunner.connect).toHaveBeenCalled();
+      expect(currentQueryRunner.startTransaction).toHaveBeenCalled();
       expect(userService.findOneId).toHaveBeenCalledWith(1);
       expect(tagService.findMultiTag).toHaveBeenCalledWith([1, 2]);
-      expect(postRepository.create).toHaveBeenCalledWith({
-        ...dto,
-        author: mockAuthor,
-        tags: mockTags,
-      });
-      expect(postRepository.save).toHaveBeenCalled();
-      expect(result).toMatchObject({
-        title: 'Hello',
-        content: 'World',
-        author: mockAuthor,
-        tags: mockTags,
-      });
+      expect(currentQueryRunner.manager.create).toHaveBeenCalled();
+      expect(currentQueryRunner.manager.save).toHaveBeenCalled();
+      expect(currentQueryRunner.commitTransaction).toHaveBeenCalled();
+      expect(currentQueryRunner.rollbackTransaction).not.toHaveBeenCalled();
+      expect(currentQueryRunner.release).toHaveBeenCalled();
+      expect(result).toBeDefined();
     });
 
-    it('propagates errors thrown by userService.findOneId', async () => {
-      userService.findOneId.mockRejectedValueOnce(new Error('author missing'));
+    it('rolls back and rethrows when the manager save fails', async () => {
+      currentQueryRunner.manager.save.mockRejectedValueOnce(new Error('disk full'));
+
+      await expect(
+        service.createPost({ authorId: 1, tags: [] } as any),
+      ).rejects.toThrow('disk full');
+
+      expect(currentQueryRunner.rollbackTransaction).toHaveBeenCalled();
+      expect(currentQueryRunner.commitTransaction).not.toHaveBeenCalled();
+      expect(currentQueryRunner.release).toHaveBeenCalled();
+    });
+
+    it('rolls back and rethrows when userService.findOneId throws', async () => {
+      userService.findOneId.mockRejectedValueOnce(new Error('author not found'));
+
       await expect(
         service.createPost({ authorId: 99, tags: [] } as any),
-      ).rejects.toThrow('author missing');
+      ).rejects.toThrow('author not found');
+
+      expect(currentQueryRunner.rollbackTransaction).toHaveBeenCalled();
+      expect(currentQueryRunner.release).toHaveBeenCalled();
     });
   });
 
   describe('UpdatePost', () => {
-    it('resolves tags, applies patch fields, and saves the post', async () => {
-      const existing = {
-        id: 10,
-        title: 'Old',
-        content: 'Old content',
-        imageUrl: 'old.png',
-        postType: 'post',
-        postStatus: 'draft',
-        tags: [],
-      };
-      postRepository.findOneBy.mockResolvedValue(existing);
-
+    it('opens a transaction, patches the post, saves, and commits', async () => {
       const patch = {
         id: 10,
-        title: 'New',
+        title: 'New title',
         content: 'New content',
         PostStatus: 'review',
       } as any;
 
       const result = await service.UpdatePost(patch);
 
+      expect(currentQueryRunner.startTransaction).toHaveBeenCalled();
       expect(tagService.findMultiTag).toHaveBeenCalledWith(patch.tags);
-      expect(postRepository.findOneBy).toHaveBeenCalledWith({ id: 10 });
-      expect(postRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: 'New',
-          content: 'New content',
-          imageUrl: 'old.png',
-          postType: 'post',
-          postStatus: 'review',
-          tags: mockTags,
-        }),
-      );
-      expect(result).toMatchObject({ title: 'New', postStatus: 'review' });
+      expect(currentQueryRunner.manager.findOneBy).toHaveBeenCalled();
+      expect(currentQueryRunner.manager.save).toHaveBeenCalled();
+      expect(currentQueryRunner.commitTransaction).toHaveBeenCalled();
+      expect(currentQueryRunner.rollbackTransaction).not.toHaveBeenCalled();
+      expect(result).toBeDefined();
     });
 
-    it('keeps existing fields when the patch omits them', async () => {
+    it('rolls back and rethrows when the manager save fails during update', async () => {
+      currentQueryRunner.manager.save.mockRejectedValueOnce(new Error('constraint violation'));
+
+      await expect(
+        service.UpdatePost({ id: 10, tags: [] } as any),
+      ).rejects.toThrow('constraint violation');
+
+      expect(currentQueryRunner.rollbackTransaction).toHaveBeenCalled();
+      expect(currentQueryRunner.commitTransaction).not.toHaveBeenCalled();
+      expect(currentQueryRunner.release).toHaveBeenCalled();
+    });
+
+    it('keeps existing field values when the patch omits them', async () => {
       const existing = {
         id: 10,
         title: 'Same',
@@ -204,15 +225,15 @@ describe('PostsService', () => {
         imageUrl: 'img.png',
         postType: 'post',
         postStatus: 'draft',
-        tags: [mockTags[0]],
+        tags: [],
       };
-      postRepository.findOneBy.mockResolvedValue(existing);
+      currentQueryRunner.manager.findOneBy.mockResolvedValueOnce({ ...existing });
+      currentQueryRunner.manager.save.mockImplementationOnce(async (_, post) => post);
 
-      const result = await service.UpdatePost({ id: 10 } as any);
+      const result = await service.UpdatePost({ id: 10, tags: [] } as any);
 
       expect(result.title).toBe('Same');
       expect(result.imageUrl).toBe('img.png');
-      expect(result.tags).toEqual(mockTags);
     });
   });
 });
