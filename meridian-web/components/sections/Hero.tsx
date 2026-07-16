@@ -1,11 +1,8 @@
-/**
- * Hero — Pure React Server Component.
- *
- * No 'use client', no framer-motion.  All animations are CSS-only
- * (defined in globals.css as @keyframes hero-fade-up) so zero JS is
- * shipped for the LCP element.  This is the single biggest win for
- * Time-to-Interactive and Largest Contentful Paint.
- */
+'use client';
+
+import { motion } from 'framer-motion';
+import { ArrowRight, DollarSign, Sparkles, Users } from 'lucide-react';
+import { CardMetric, CardMetrics } from '@/components/ui/metric-card';
 import { ArrowRight } from 'lucide-react';
 
 export function Hero() {
@@ -70,6 +67,36 @@ export function Hero() {
           </a>
         </div>
 
+        {/* Feature highlights */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.4 }}
+          className="mt-16 pt-12 border-t border-border"
+        >
+          <CardMetrics>
+            <CardMetric
+              icon={<Users className="h-5 w-5" />}
+              label="Active Users"
+              value="10K+"
+              tooltip="Active users across MERIDIAN focus, stream, and pool experiences."
+            />
+            <CardMetric
+              icon={<DollarSign className="h-5 w-5" />}
+              label="Streamed Monthly"
+              value="$2.5M"
+              delta="+14% month-over-month"
+              deltaVariant="positive"
+              tooltip="Total value streamed through MERIDIAN payment channels this month."
+            />
+            <CardMetric
+              icon={<Sparkles className="h-5 w-5" />}
+              label="Yield Distributed"
+              value="$500K"
+              tooltip="Yield rewards distributed from no-loss pools and community supercharge streams."
+            />
+          </CardMetrics>
+        </motion.div>
         {/* Stats row */}
         <div
           className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-16 pt-12 border-t border-border
