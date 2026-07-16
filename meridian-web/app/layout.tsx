@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 import { ThemeProvider } from '@/components/theme-provider'
+import { Toaster } from '@/components/ui/sonner'
 
 // `display: 'swap'` keeps text visible with a fallback font while Geist
 // loads, so web fonts never block first paint / LCP. (next/font defaults to
@@ -63,6 +64,9 @@ export default function RootLayout({
           themes={['light', 'dark', 'system']}
         >
           {children}
+          {/* Global toast outlet — required for `toast()` calls (e.g. the
+              sign-in page) to actually render notifications. */}
+          <Toaster />
         </ThemeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
