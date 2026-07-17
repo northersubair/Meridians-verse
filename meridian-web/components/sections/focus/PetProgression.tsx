@@ -9,7 +9,9 @@ export function PetProgression() {
       variants={itemVariants}
       className="bg-card border border-border rounded-2xl p-8 text-center"
     >
-      <div className="text-6xl mb-4">🥚 → 🐣 → 🦆 → 🦢 → 👑</div>
+      <div className="text-6xl mb-4" role="img" aria-label="Pet evolution progression from egg to crowned bird">
+        🥚 → 🐣 → 🦆 → 🦢 → 👑
+      </div>
       <p className="text-muted-foreground">Your pet evolves as you stay focused</p>
     </motion.div>
   );

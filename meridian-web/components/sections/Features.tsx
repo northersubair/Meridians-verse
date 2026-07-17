@@ -60,6 +60,8 @@ export function Features() {
   return (
     <section id="features" className="py-20 px-4 max-w-7xl mx-auto">
       <motion.div
+        role="presentation"
+        aria-hidden="true"
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
@@ -73,6 +75,8 @@ export function Features() {
       </motion.div>
 
       <motion.div
+        role="presentation"
+        aria-hidden="true"
         variants={containerVariants}
         initial="hidden"
         whileInView="visible"
