@@ -21,6 +21,7 @@ export default function Page() {
     <>
       <Header />
       <main className="pt-16">
+        <h1 className="sr-only">MERIDIAN — Where Real-World Effort Meets On-Chain Value</h1>
         {/* ── Above the fold ── server-rendered for SEO and fast LCP ──────── */}
         {/*
          * Hero is a pure RSC — no JS shipped, CSS-only animations.
