@@ -22,12 +22,15 @@ const leaderboard: LeaderboardEntry[] = [
 export function LeaderboardCard() {
   return (
     <motion.div
+      role="presentation"
+      aria-hidden="true"
       initial={{ opacity: 0, scale: 0.95 }}
       whileInView={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.6 }}
       viewport={{ once: true }}
       className="bg-card border border-border rounded-2xl p-8"
     >
+      <div className="sr-only">Weekly Leaderboard</div>
       <h3 className="font-semibold text-foreground mb-6 flex items-center gap-2">
         <Award size={20} className="text-primary" />
         Weekly Leaderboard

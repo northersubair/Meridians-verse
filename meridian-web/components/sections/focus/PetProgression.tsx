@@ -105,6 +105,10 @@ export function PetProgression() {
           )}
         </div>
       </div>
+      <div className="text-6xl mb-4" role="img" aria-label="Pet evolution progression from egg to crowned bird">
+        🥚 → 🐣 → 🦆 → 🦢 → 👑
+      </div>
+      <p className="text-muted-foreground">Your pet evolves as you stay focused</p>
     </motion.div>
   );
 }

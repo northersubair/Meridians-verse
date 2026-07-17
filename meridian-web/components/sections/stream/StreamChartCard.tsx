@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { TrendingUp } from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -10,7 +11,6 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { TrendingUp } from 'lucide-react';
 
 const streamData = [
   { time: '9:00', amount: 0 },
@@ -24,6 +24,8 @@ const streamData = [
 export function StreamChartCard() {
   return (
     <motion.div
+      role="presentation"
+      aria-hidden="true"
       initial={{ opacity: 0, scale: 0.95 }}
       whileInView={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.6 }}
