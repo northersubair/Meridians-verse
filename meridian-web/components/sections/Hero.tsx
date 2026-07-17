@@ -3,7 +3,6 @@
 import { motion } from 'framer-motion';
 import { ArrowRight, DollarSign, Sparkles, Users } from 'lucide-react';
 import { CardMetric, CardMetrics } from '@/components/ui/metric-card';
-import { ArrowRight } from 'lucide-react';
 
 export function Hero() {
   return (
