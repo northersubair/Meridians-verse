@@ -118,9 +118,7 @@ describe('EventsService', () => {
       const mockFind = jest
         .spyOn(mockAuditService['auditRepo'], 'find')
         .mockResolvedValue([{ id: 1 } as AuditLog]);
-      jest
-        .spyOn(mockAuditService['auditRepo'], 'count')
-        .mockResolvedValue(1);
+      jest.spyOn(mockAuditService['auditRepo'], 'count').mockResolvedValue(1);
 
       const result = await service.findAuditLogs({ limit: 10 });
       expect(result.data).toHaveLength(1);
@@ -147,9 +145,7 @@ describe('EventsService', () => {
 
   describe('verifyHashChain', () => {
     it('should return valid for empty chain', async () => {
-      jest
-        .spyOn(mockAuditService['auditRepo'], 'find')
-        .mockResolvedValue([]);
+      jest.spyOn(mockAuditService['auditRepo'], 'find').mockResolvedValue([]);
 
       const result = await service.verifyHashChain();
       expect(result.valid).toBe(true);

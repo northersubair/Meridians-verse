@@ -7,10 +7,7 @@ import { WebhookController } from './webhook.controller';
 import { Webhook } from './webhook.entity';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Webhook]),
-    AuditModule,
-  ],
+  imports: [TypeOrmModule.forFeature([Webhook]), AuditModule],
   providers: [EventsService],
   controllers: [AuditController, WebhookController],
   exports: [EventsService],
