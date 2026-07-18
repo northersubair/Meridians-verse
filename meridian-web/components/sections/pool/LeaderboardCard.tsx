@@ -9,6 +9,18 @@ interface LeaderboardEntry {
   name: string;
   xp: number;
   yield: string;
+  proof?: { leaf: string; proof: string[]; root: string; verified: boolean; leafIndex: number } | null;
+}
+
+function verifyProof(leaf: string, proof: string[], root: string): boolean {
+  if (!leaf || !root) return false;
+
+  let current = leaf;
+  for (const sibling of proof) {
+    current = `${current}:${sibling}`;
+  }
+
+  return current === root;
 }
 
 const leaderboard: LeaderboardEntry[] = [
@@ -43,7 +55,9 @@ export function LeaderboardCard() {
         viewport={{ once: true }}
         className="space-y-3"
       >
-        {leaderboard.map((entry) => (
+        {leaderboard.map((entry) => {
+          const isVerified = entry.proof ? verifyProof(entry.proof.leaf, entry.proof.proof, entry.proof.root) : false;
+          return (
           <motion.div
             key={entry.rank}
             variants={itemVariantsLeft}
@@ -62,10 +76,11 @@ export function LeaderboardCard() {
             </div>
             <div className="text-right">
               <p className="font-semibold text-primary">{entry.yield}</p>
-              <p className="text-xs text-muted-foreground">This week</p>
+              <p className="text-xs text-muted-foreground">{isVerified ? 'Verified proof' : 'Missing proof'}</p>
             </div>
           </motion.div>
-        ))}
+          );
+        })}
       </motion.div>
 
       <button className="w-full mt-6 px-4 py-3 rounded-lg border border-primary text-primary font-semibold hover:bg-primary/5 transition-colors">
