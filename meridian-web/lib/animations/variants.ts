@@ -1,3 +1,12 @@
+/**
+ * ==========================================
+ * MOTION AND ACCESSIBILITY POLICY STANDARD
+ * ==========================================
+ * 1. All animations must respect `prefers-reduced-motion` natively or via global context.
+ * 2. Variant initial states must evaluate directly to safe layouts if motion is disabled.
+ * 3. Element initial states must avoid invisible/unrendered states to completely mitigate FOUC.
+ */
+
 import type { Variants } from 'framer-motion';
 
 /**
