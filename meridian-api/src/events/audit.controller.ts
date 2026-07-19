@@ -1,5 +1,19 @@
-import { Controller, Get, Param, Query, HttpCode, HttpStatus, NotFoundException } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery, ApiParam, ApiResponse } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Param,
+  Query,
+  HttpCode,
+  HttpStatus,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiQuery,
+  ApiParam,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { EventsService } from './events.service';
 import { AuditQueryDto } from './dto/audit-query.dto';
 
@@ -10,7 +24,9 @@ export class AuditController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'List audit log entries with cursor pagination and filters' })
+  @ApiOperation({
+    summary: 'List audit log entries with cursor pagination and filters',
+  })
   @ApiResponse({ status: 200, description: 'Paginated audit log entries' })
   async findAll(@Query() query: AuditQueryDto) {
     const result = await this.eventsService.findAuditLogs({

@@ -4,6 +4,8 @@ import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/ui/sonner'
+import { PerformanceMonitor } from '@/components/performance-monitor'
+import { PerformanceMonitor } from '@/components/performance-monitor'
 
 // `display: 'swap'` keeps text visible with a fallback font while Geist
 // loads, so web fonts never block first paint / LCP. (next/font defaults to
@@ -102,8 +104,12 @@ export default function RootLayout({
           {/* Global toast outlet — required for `toast()` calls (e.g. the
               sign-in page) to actually render notifications. */}
           <Toaster />
+          {/* Performance monitoring for Core Web Vitals */}
+          <PerformanceMonitor />
         </ThemeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
+        {/* Monitor Core Web Vitals and report to analytics */}
+        <PerformanceMonitor />
       </body>
     </html>
   )

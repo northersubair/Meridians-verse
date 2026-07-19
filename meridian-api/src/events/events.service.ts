@@ -53,7 +53,10 @@ export class EventsService implements OnModuleInit {
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval);
     }
-    this.pollingInterval = setInterval(() => this.pollContractEvents(), intervalMs);
+    this.pollingInterval = setInterval(
+      () => this.pollContractEvents(),
+      intervalMs,
+    );
     this.pollContractEvents();
   }
 
@@ -75,7 +78,9 @@ export class EventsService implements OnModuleInit {
       if (latestBlock <= this.lastPolledBlock) return;
 
       const fromBlock = this.lastPolledBlock + 1;
-      this.logger.log(`Polling events from block ${fromBlock} to ${latestBlock}`);
+      this.logger.log(
+        `Polling events from block ${fromBlock} to ${latestBlock}`,
+      );
 
       const events = await this.provider.getEvents(fromBlock, latestBlock);
       for (const event of events) {
@@ -90,13 +95,17 @@ export class EventsService implements OnModuleInit {
 
           await this.deliverWebhooks(event, auditEntry);
         } catch (err) {
-          this.logger.error(`Failed to ingest event ${event.txHash}: ${err instanceof Error ? err.message : String(err)}`);
+          this.logger.error(
+            `Failed to ingest event ${event.txHash}: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
       }
 
       this.lastPolledBlock = latestBlock;
     } catch (err) {
-      this.logger.error(`Polling failed: ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.error(
+        `Polling failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
@@ -150,9 +159,10 @@ export class EventsService implements OnModuleInit {
     address?: string;
     generateSecret?: boolean;
   }): Promise<Webhook> {
-    const secret = dto.generateSecret !== false
-      ? randomBytes(32).toString('hex')
-      : 'no-secret';
+    const secret =
+      dto.generateSecret !== false
+        ? randomBytes(32).toString('hex')
+        : 'no-secret';
 
     const webhook = this.webhookRepo.create({
       url: dto.url,
@@ -165,7 +175,11 @@ export class EventsService implements OnModuleInit {
     return this.webhookRepo.save(webhook);
   }
 
-  async verifyHashChain(): Promise<{ valid: boolean; entries: number; tamperedAt?: number }> {
+  async verifyHashChain(): Promise<{
+    valid: boolean;
+    entries: number;
+    tamperedAt?: number;
+  }> {
     const entries = await this.auditService['auditRepo'].find({
       where: { action: AuditAction.CONTRACT_EVENT },
       order: { id: 'ASC' },
@@ -277,6 +291,10 @@ export class EventsService implements OnModuleInit {
   }
 
   private async deliverWebhooks(event: ContractEvent, auditEntry: AuditLog): Promise<void> {
+  private async deliverWebhooks(
+    event: ContractEvent,
+    auditEntry: AuditLog,
+  ): Promise<void> {
     const webhooks = await this.webhookRepo.find({
       where: [
         { isActive: true, contract: event.contract, action: event.action },
@@ -332,11 +350,15 @@ export class EventsService implements OnModuleInit {
           });
           if (wh.failureCount + 1 >= 10) {
             await this.webhookRepo.update(wh.id, { isActive: false });
-            this.logger.warn(`Webhook ${wh.id} deactivated after ${wh.failureCount + 1} failures`);
+            this.logger.warn(
+              `Webhook ${wh.id} deactivated after ${wh.failureCount + 1} failures`,
+            );
           }
         }
       } catch (err) {
-        this.logger.error(`Webhook delivery failed for ${wh.id}: ${err instanceof Error ? err.message : String(err)}`);
+        this.logger.error(
+          `Webhook delivery failed for ${wh.id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
         await this.webhookRepo.update(wh.id, {
           failureCount: wh.failureCount + 1,
         });

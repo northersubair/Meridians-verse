@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { TrendingUp } from 'lucide-react';
+import { cardReveal, sectionViewport } from '@/lib/animations/variants';
 import {
   LineChart,
   Line,
@@ -26,10 +27,10 @@ export function StreamChartCard() {
     <motion.div
       role="presentation"
       aria-hidden="true"
-      initial={{ opacity: 0, scale: 0.95 }}
-      whileInView={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.6 }}
-      viewport={{ once: true }}
+      variants={cardReveal}
+      initial="hidden"
+      whileInView="visible"
+      viewport={sectionViewport}
       className="bg-card border border-border rounded-2xl p-8"
     >
       <h3 className="font-semibold text-foreground mb-6 flex items-center gap-2">

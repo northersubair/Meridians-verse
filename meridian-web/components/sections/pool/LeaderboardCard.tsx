@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { Award } from 'lucide-react';
-import { containerVariants, itemVariantsLeft } from '@/lib/animations/variants';
+import { cardReveal, containerVariants, itemVariantsLeft, sectionViewport } from '@/lib/animations/variants';
 
 interface LeaderboardEntry {
   rank: number;
@@ -36,10 +36,10 @@ export function LeaderboardCard() {
     <motion.div
       role="presentation"
       aria-hidden="true"
-      initial={{ opacity: 0, scale: 0.95 }}
-      whileInView={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.6 }}
-      viewport={{ once: true }}
+      variants={cardReveal}
+      initial="hidden"
+      whileInView="visible"
+      viewport={sectionViewport}
       className="bg-card border border-border rounded-2xl p-8"
     >
       <div className="sr-only">Weekly Leaderboard</div>
@@ -52,7 +52,7 @@ export function LeaderboardCard() {
         variants={containerVariants}
         initial="hidden"
         whileInView="visible"
-        viewport={{ once: true }}
+        viewport={sectionViewport}
         className="space-y-3"
       >
         {leaderboard.map((entry) => {
