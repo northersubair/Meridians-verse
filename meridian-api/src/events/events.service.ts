@@ -23,14 +23,6 @@ export interface MerkleProofResult {
   leafIndex: number;
 }
 
-export interface MerkleProofResult {
-  leaf: string;
-  proof: string[];
-  root: string;
-  verified: boolean;
-  leafIndex: number;
-}
-
 export interface RpcProvider {
   getLatestBlockNumber(): Promise<number>;
   getEvents(fromBlock: number, toBlock: number): Promise<ContractEvent[]>;
@@ -298,94 +290,6 @@ export class EventsService implements OnModuleInit {
     return createHash('sha256').update(`${left}:${right}`).digest('hex');
   }
 
-  async buildMerkleProof(index: number, entries: Array<Pick<AuditLog, 'chainHash'>> = []): Promise<MerkleProofResult | null> {
-    const leaves = entries
-      .filter((entry) => Boolean(entry.chainHash))
-      .map((entry) => entry.chainHash as string);
-
-    if (leaves.length === 0 || index < 0 || index >= leaves.length) {
-      return null;
-    }
-
-    const leaf = leaves[index];
-    const proof: string[] = [];
-    let currentLevel = [...leaves].map((value) => this.hashLeaf(value));
-    let currentIndex = index;
-
-    while (currentLevel.length > 1) {
-      const nextLevel: string[] = [];
-      const levelSize = currentLevel.length;
-
-      for (let i = 0; i < levelSize; i += 2) {
-        const left = currentLevel[i];
-        const right = currentLevel[i + 1] ?? left;
-        const combined = this.hashNode(left, right);
-        nextLevel.push(combined);
-
-        if (i === currentIndex || i + 1 === currentIndex) {
-          const siblingIndex = currentIndex % 2 === 0 ? currentIndex + 1 : currentIndex - 1;
-          const sibling = siblingIndex < levelSize ? currentLevel[siblingIndex] : left;
-          proof.push(sibling);
-        }
-      }
-
-      currentIndex = Math.floor(currentIndex / 2);
-      currentLevel = nextLevel;
-    }
-
-    return {
-      leaf,
-      proof,
-      root: currentLevel[0] ?? '',
-      verified: true,
-      leafIndex: index,
-    };
-  }
-
-  verifyMerkleProof(leaf: string, proof: string[], root: string): boolean {
-    if (!leaf || !root) {
-      return false;
-    }
-
-    let candidates = [this.hashLeaf(leaf)];
-    for (const sibling of proof) {
-      const nextCandidates: string[] = [];
-      for (const candidate of candidates) {
-        nextCandidates.push(this.hashNode(candidate, sibling));
-        nextCandidates.push(this.hashNode(sibling, candidate));
-      }
-      candidates = nextCandidates;
-    }
-
-    return candidates.includes(root);
-  }
-
-  async getLeaderboardProofs(limit = 10): Promise<{ root: string; entries: Array<AuditLog & { proof: MerkleProofResult | null }> }> {
-    const logs = await this.auditService['auditRepo'].find({
-      where: { action: AuditAction.CONTRACT_EVENT },
-      order: { id: 'DESC' },
-      take: limit,
-    });
-
-    const entries = await Promise.all(logs.map(async (log, index) => ({
-      ...log,
-      proof: await this.buildMerkleProof(index, logs),
-    })));
-
-    const root = entries[0]?.proof?.root ?? '';
-
-    return { root, entries };
-  }
-
-  private hashLeaf(value: string): string {
-    return createHash('sha256').update(value).digest('hex');
-  }
-
-  private hashNode(left: string, right: string): string {
-    return createHash('sha256').update(`${left}:${right}`).digest('hex');
-  }
-
-  private async deliverWebhooks(event: ContractEvent, auditEntry: AuditLog): Promise<void> {
   private async deliverWebhooks(
     event: ContractEvent,
     auditEntry: AuditLog,
