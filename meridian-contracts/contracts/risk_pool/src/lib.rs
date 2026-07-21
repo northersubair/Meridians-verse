@@ -44,9 +44,9 @@ pub struct RiskPoolContract;
 
 #[contractimpl]
 impl RiskPoolContract {
-    pub fn initialize(env: Env, admin: Address, token: Address, min_stake: i128) {
+    pub fn initialize(env: Env, admin: Address, token: Address, min_stake: i128) -> Result<(), RiskPoolError> {
         if env.storage().instance().has(&DataKey::Admin) {
-            panic!("Already initialized");
+            return Err(RiskPoolError::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Token, &token);
@@ -54,20 +54,21 @@ impl RiskPoolContract {
         env.storage().instance().set(&DataKey::TotalCapital, &0i128);
         env.storage().instance().set(&DataKey::AvailableCapital, &0i128);
         env.storage().instance().set(&DataKey::ClaimsPaid, &0i128);
+        Ok(())
     }
 
-    pub fn deposit_liquidity(env: Env, provider: Address, amount: i128) {
+    pub fn deposit_liquidity(env: Env, provider: Address, amount: i128) -> Result<(), RiskPoolError> {
         provider.require_auth();
         
         let min_stake: i128 = env.storage().instance().get(&DataKey::MinStake)
-            .expect("Contract not initialized");
+            .ok_or(RiskPoolError::NotInitialized)?;
 
         if amount < min_stake {
-            panic!("Amount below minimum stake");
+            return Err(RiskPoolError::BelowMinimumStake);
         }
 
         let token: Address = env.storage().instance().get(&DataKey::Token)
-            .unwrap_or_else(|| panic!("Contract not initialized"));
+            .ok_or(RiskPoolError::NotInitialized)?;
         
         // Transfer tokens from provider to this contract
         let client = soroban_sdk::token::Client::new(&env, &token);
@@ -87,23 +88,24 @@ impl RiskPoolContract {
             (symbol_short!("pool"), symbol_short!("deposit")),
             (provider, amount, new_stake),
         );
+        Ok(())
     }
 
-    pub fn withdraw_liquidity(env: Env, provider: Address, amount: i128) {
+    pub fn withdraw_liquidity(env: Env, provider: Address, amount: i128) -> Result<(), RiskPoolError> {
         provider.require_auth();
 
         let stake = get_provider_stake(&env, &provider);
         if stake < amount {
-            panic!("Insufficient stake");
+            return Err(RiskPoolError::InsufficientStake);
         }
 
         let avail = get_available_capital(&env);
         if avail < amount {
-            panic!("Insufficient available capital in pool");
+            return Err(RiskPoolError::InsufficientPoolFunds);
         }
 
         let token: Address = env.storage().instance().get(&DataKey::Token)
-            .unwrap_or_else(|| panic!("Contract not initialized"));
+            .ok_or(RiskPoolError::NotInitialized)?;
         let client = soroban_sdk::token::Client::new(&env, &token);
         client.transfer(&env.current_contract_address(), &provider, &amount);
 
@@ -120,20 +122,21 @@ impl RiskPoolContract {
             (symbol_short!("pool"), symbol_short!("withdraw")),
             (provider, amount, new_stake),
         );
+        Ok(())
     }
 
-    pub fn payout_claim(env: Env, recipient: Address, amount: i128) {
+    pub fn payout_claim(env: Env, recipient: Address, amount: i128) -> Result<(), RiskPoolError> {
         let admin = get_admin(&env);
         admin.require_auth();
 
         // #410: Verify available capital before payout
         let avail = get_available_capital(&env);
         if avail < amount {
-            panic!("Insufficient pool funds for payout");
+            return Err(RiskPoolError::InsufficientPoolFunds);
         }
 
         let token: Address = env.storage().instance().get(&DataKey::Token)
-            .unwrap_or_else(|| panic!("Contract not initialized"));
+            .ok_or(RiskPoolError::NotInitialized)?;
         let client = soroban_sdk::token::Client::new(&env, &token);
         client.transfer(&env.current_contract_address(), &recipient, &amount);
 
@@ -148,6 +151,7 @@ impl RiskPoolContract {
             (symbol_short!("pool"), symbol_short!("payout")),
             (recipient, amount, new_available),
         );
+        Ok(())
     }
 }
 

@@ -54,7 +54,8 @@ export class AuditService {
       order: { id: 'DESC' },
     });
 
-    const payload = `${ctx.txHash}:${ctx.contract}:${ctx.contractAction}:${ctx.blockNumber}:${JSON.stringify(ctx.rawEvent || {})}`;
+    const previousHash = previousEntry?.chainHash ?? null;
+    const payload = `${ctx.txHash}:${ctx.contract}:${ctx.contractAction}:${ctx.blockNumber}:${JSON.stringify(ctx.rawEvent || {})}:${previousHash ?? ''}`;
     const chainHash = createHash('sha256').update(payload).digest('hex');
 
     const entry = this.auditRepo.create({
@@ -65,7 +66,7 @@ export class AuditService {
       contract: ctx.contract,
       contractAction: ctx.contractAction,
       blockNumber: ctx.blockNumber,
-      previousHash: previousEntry?.chainHash || null,
+      previousHash,
       chainHash,
       rawEvent: ctx.rawEvent ?? null,
     });
