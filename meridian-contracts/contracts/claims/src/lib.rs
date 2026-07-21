@@ -15,6 +15,7 @@ pub enum DataKey {
     /// #409: Maps policy_id -> active claim_id. Present only while a claim is active
     /// (Submitted / UnderReview / Approved). Cleared on Rejected or Settled.
     PolicyActiveClaim(u64),
+    SettlingClaim(Address),
 }
 
 // --- Storage helpers (#378: data access abstraction) ---
