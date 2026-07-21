@@ -2,6 +2,7 @@
 
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env};
 use stellar_insured_lib::RiskPoolError;
+use stellar_insured_lib::access_control::{self, AccessControlRole};
 
 #[contracttype]
 #[derive(Clone)]
@@ -24,10 +25,6 @@ pub struct PoolStats {
 }
 
 // --- Storage helpers (#378: data access abstraction) ---
-
-fn get_admin(env: &Env) -> Address {
-    env.storage().instance().get(&DataKey::Admin).unwrap()
-}
 
 fn get_token(env: &Env) -> Address {
     env.storage().instance().get(&DataKey::Token).unwrap()
@@ -62,6 +59,12 @@ impl RiskPoolContract {
         env.storage().instance().set(&DataKey::TotalCapital, &0i128);
         env.storage().instance().set(&DataKey::AvailableCapital, &0i128);
         env.storage().instance().set(&DataKey::ClaimsPaid, &0i128);
+        access_control::init_access_control(&env, &admin);
+        Ok(())
+    }
+
+    pub fn set_role(env: Env, addr: Address, role: AccessControlRole) -> Result<(), RiskPoolError> {
+        access_control::set_role(&env, &env.current_contract_address(), &addr, role);
         Ok(())
     }
 
@@ -134,8 +137,8 @@ impl RiskPoolContract {
     }
 
     pub fn payout_claim(env: Env, recipient: Address, amount: i128) -> Result<(), RiskPoolError> {
-        let admin = get_admin(&env);
-        admin.require_auth();
+        let caller = env.current_contract_address();
+        access_control::require_role(&env, &caller, &AccessControlRole::Admin);
 
         // #410: Verify available capital before payout
         let avail = get_available_capital(&env);
@@ -161,10 +164,7 @@ impl RiskPoolContract {
         );
         Ok(())
     }
-}
 
-#[contractimpl]
-impl RiskPoolContract {
     pub fn get_pool_stats(env: Env) -> PoolStats {
         PoolStats {
             total_capital: get_total_capital(&env),
@@ -175,5 +175,32 @@ impl RiskPoolContract {
 
     pub fn get_provider_info(env: Env, provider: Address) -> i128 {
         get_provider_stake(&env, &provider)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use soroban_sdk::testutils::Address as _;
+    use soroban_sdk::{Env, Address};
+
+    fn setup() -> (Env, Address, Address) {
+        let env = Env::default();
+        let contract = env.register_contract(None, RiskPoolContract);
+        let admin = Address::generate(&env);
+        let token = Address::generate(&env);
+        env.mock_all_auths();
+        env.as_contract(&contract, || {
+            RiskPoolContract::initialize(env.clone(), admin.clone(), token, 100).unwrap();
+        });
+        (env, contract, admin)
+    }
+
+    #[test]
+    fn test_initialize_sets_admin_role() {
+        let (env, contract, admin) = setup();
+        env.as_contract(&contract, || {
+            assert!(access_control::has_role(&env, &admin, &AccessControlRole::Admin));
+        });
     }
 }
